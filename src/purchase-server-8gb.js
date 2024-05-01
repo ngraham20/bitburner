@@ -3,9 +3,10 @@ export async function main(ns) {
     // How much RAM each purchased server will have. In this case, it'll
     // be 8GB.
     const ram = 8;
+    let botnet = "dynamic-hack.js";
   
     // Iterator we'll use for our loop
-    let i = ns.getPurchasedServers.length;
+    let i = 0;
   
     // Continuously try to purchase servers until we've reached the maximum
     // amount of servers
@@ -18,6 +19,9 @@ export async function main(ns) {
         //  3. Run our hacking script on the newly-purchased server with 3 threads
         //  4. Increment our iterator to indicate that we've bought a new server
         let hostname = ns.purchaseServer("pserv-" + i, ram);
+        ns.print("Accessing: " + hostname);
+        ns.scp(botnet, con);
+        ns.exec(botnet, con, numThreads);
         ++i;
       }
       //Make the script wait for a second before looping again.
