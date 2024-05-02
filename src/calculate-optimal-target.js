@@ -8,6 +8,7 @@ export async function main(ns) {
   let hackingLevel = ns.getHackingLevel();
   let servers = [];
   let viableTargets = [];
+  ns.rm("target-ranks.txt");
   // iterate all level(x)servers.txt files
   for(let i=0; i <= maxLevel; i++ ){
     let filename = "level"+i+"servers.txt";
@@ -27,8 +28,10 @@ export async function main(ns) {
 
   // sort ascending
   viableTargets.sort(function(a, b){return a.maxMoney - b.maxMoney});
-  ns.tprint("Top three targets are: ");
-  ns.tprint(viableTargets.pop().server);
-  ns.tprint(viableTargets.pop().server);
-  ns.tprint(viableTargets.pop().server);
+  ns.tprint("Top ten targets are: ");
+  for (let i = 0; i < 10; i++) {
+    let target = viableTargets.pop().server;
+    ns.tprint("Rank :"+(i+1)+" "+target);
+    ns.write("target-ranks.txt", target +"\n", "a");
+  }
 }

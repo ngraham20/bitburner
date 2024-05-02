@@ -12,7 +12,7 @@ export async function main(ns) {
     let lvlconnections = lvlfile.split(/\n/);
     for (const con of lvlconnections) {
         if (con) {
-            ns.tprint("Accessing: " + con);
+            ns.print("Accessing: " + con);
             ns.nuke(con);
             initialize(ns, con, squad);
             squad = (squad + 1) % 10;
@@ -27,7 +27,7 @@ export async function main(ns) {
         let lvlconnections = lvlfile.split(/\n/);
         for (const con of lvlconnections) {
             if (con) {
-                ns.tprint("Accessing: " + con);
+                ns.print("Accessing: " + con);
 
                 // execute all cracks up to the current level
                 for(let program = 0; program < level; program++) {

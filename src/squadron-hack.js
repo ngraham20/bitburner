@@ -17,9 +17,13 @@ export async function main(ns) {
         }
       }
       else if (target != "NULL PORT DATA") { // if the orders haven't changed and aren't blank, do the thing
+        var availableMoney = ns.getServerMoneyAvailable(target);
+        if (availableMoney == 0) {
+          ns.toast("Latest hack wave of target: "+target+" has depleted its available money.", "warning", null);
+        }
         if (ns.getServerSecurityLevel(target) > securityThresh) {
           await ns.weaken(target);
-        } else if (ns.getServerMoneyAvailable(target) < moneyThresh) {
+        } else if (availableMoney < moneyThresh) {
           await ns.grow(target);
         } else {
           await ns.hack(target);

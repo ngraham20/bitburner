@@ -11,6 +11,19 @@ export async function main(ns) {
       }
       ns.exit();
     }
+    if (orders == "distribute") {
+      let targets = ns.read("target-ranks.txt").split(/\n/);
+      targets.pop(); // remove the trailing "\n"
+      for (let i = 0; i < targets.length; i++) {
+        let port = squadports[i];
+        let target = targets[i];
+        ns.tprint("Squad "+i+": "+target);
+        ns.clearPort(port);
+        ns.writePort(port, target);
+      }
+      ns.exit();
+    }
+
     let squadrons = ns.args[1].toString();
     let bookends = squadrons.split(/-/);
     if (bookends.length > 2 || bookends.length < 1) {
