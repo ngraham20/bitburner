@@ -3,6 +3,7 @@ export async function main(ns) {
     let orders = ns.args[0];
     let squadports = [25505, 25515, 25525, 25535, 25545, 25555, 25565, 25575, 25585, 25595]
 
+    // TODO: reorganize this so you can clear orders from specific squads
     if (!orders) {
       ns.tprint("Clearing all orders");
       for (let i = 0; i < squadports.length; i++) {
