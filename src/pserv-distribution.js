@@ -5,7 +5,8 @@ export async function main(ns) {
     for(let i = 0; i < serverLimit; i++) {
 
         // wait until the script is purchased
-        while(!ns.serverExists("pserv-"+i)) {
+        let con = "pserv-"+i;
+        while(!ns.serverExists(con)) {
             ns.sleep(60000);
         }
         ns.tprint("Accessing: " + con);
