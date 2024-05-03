@@ -77,15 +77,15 @@ export async function main(ns) {
 function allocate_worker_threads(ns, threadpool, action, target, threadcount) {
     let actionTime;
     switch (action) {
-        case HACK: {
+        case HACK:
             actionTime = ns.getHackTime(target);
-        }
-        case GROW: {
+            break;
+        case GROW:
             actionTime = ns.getGrowTime(target);
-        }
-        case WEAKEN: {
+            break;
+        case WEAKEN:
             actionTime = ns.getWeakenTime(target);
-        }
+            break;
     }
     // don't allocate more than 5% resources to a single dispatch
     let maxAllocation = Math.floor(threadpool.totalThreads * 0.05);
