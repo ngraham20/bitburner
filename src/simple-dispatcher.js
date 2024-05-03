@@ -16,16 +16,20 @@ export async function main(ns) {
     }
 
     for (const target of targets) {
-        add_target(threadpool, target);
+        add_target(ns, threadpool, target);
     }
 
     while (true) {
         let network = analyze_network(ns, 15);
         let pservers = network.purchasedServers;
+        let rservers = network.rootedServers;
         let nservers = network.networkServers;
-        let workers = pservers.concat(nservers);
+        let workers = pservers.concat(rservers);
         for (const worker of workers) {
             add_worker(ns, threadpool, worker);
+        }
+        for (const target of nservers) {
+            add_target(ns, threadpool, target);
         }
         monitor_jobs(ns, threadpool);
         determine_assignment(ns, threadpool);
@@ -244,14 +248,18 @@ function add_worker(ns, threadpool, worker) {
     }
 }
 
-function add_target(threadpool, target) {
-    threadpool.targets.push(target);
-    threadpool.allocations[target] = {
-        jobs: [],
-        weaken: 0,
-        grow: 0,
-        hack: 0,
-    };
+/** @param {NS} ns */
+function add_target(ns, threadpool, target) {
+    if (!threadpool.targets.includes(target)) {
+        ns.tprint("Adding target: "+target);
+        threadpool.targets.push(target);
+        threadpool.allocations[target] = {
+            jobs: [],
+            weaken: 0,
+            grow: 0,
+            hack: 0,
+        };
+    }
 }
 
 /** @param {NS} ns */
