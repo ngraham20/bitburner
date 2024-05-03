@@ -7,7 +7,7 @@ const WEAKEN_STRENGTH = 0.05;
 /** @param {NS} ns */
 export async function main(ns) {
     let workers = ["n00dles", "joesguns", "foodnstuff"];
-    let targets = ["n00dles", "joesguns", "foodnstuff"];
+    let targets = ["n00dles", "foodnstuff"];
 
     let threadpool = new_threadpool()
 
@@ -20,10 +20,61 @@ export async function main(ns) {
     }
 
     while (true) {
+        let network = analyze_network(ns, 15);
+        let pservers = network.purchasedServers;
+        let nservers = network.networkServers;
+        let workers = pservers.concat(nservers);
+        for (const worker of workers) {
+            add_worker(ns, threadpool, worker);
+        }
         monitor_jobs(ns, threadpool);
         determine_assignment(ns, threadpool);
         await ns.sleep(1000);
     }
+}
+
+  /** @param {NS} ns */
+  function analyze_network(ns, maxdepth) {
+    let ctx = {
+        visited: ["home"],
+        path: [{ "home": "home" }],
+        maxdepth: maxdepth,
+    };
+
+    let network = {
+        rootedServers: [],
+        networkServers: [],
+        purchasedServers: [],
+    };
+    
+    // for each depth asked for
+    for (let depth = 0; depth < ctx.maxdepth; depth++) {
+        ctx.path.push({});
+
+        // iterate all connections at this depth for sub-connections
+        // put those sub-connections in the next-highest depth
+        let homes = ctx.path[depth];
+        for (const [home, _] of Object.entries(homes)) {
+            let connections = ns.scan(home);
+            for (const con of connections) {
+                if (con.substring(0,5) == "pserv") {
+                    network.purchasedServers.push(con);
+
+                    continue;
+                }
+                if (!ctx.visited.includes(con)) {
+                    network.networkServers.push(con);
+                    if (ns.hasRootAccess(con)) {
+                        network.rootedServers.push(con);
+                    }
+
+                    ctx.visited.push(con);
+                    ctx.path[depth + 1][con] = ctx.path[depth][home] + ">" + con;
+                }
+            }
+        }
+    }
+    return network;
 }
 
 /** @param {NS} ns */
@@ -184,11 +235,13 @@ function monitor_jobs(ns, threadpool) {
 
 /** @param {NS} ns */
 function add_worker(ns, threadpool, worker) {
-    let maxThreads = Math.floor(ns.getServerMaxRam(worker) / ACTION_COST);
-    ns.tprint("Max threads for this worker: "+maxThreads);
-    threadpool.workers[worker] = maxThreads;
-    threadpool.totalThreads += maxThreads;
-    threadpool.availableThreads += maxThreads;
+    if (!(worker in threadpool.workers)) {
+        let maxThreads = Math.floor(ns.getServerMaxRam(worker) / ACTION_COST);
+        ns.tprint("Max threads for this worker: "+maxThreads);
+        threadpool.workers[worker] = maxThreads;
+        threadpool.totalThreads += maxThreads;
+        threadpool.availableThreads += maxThreads;
+    }
 }
 
 function add_target(threadpool, target) {
