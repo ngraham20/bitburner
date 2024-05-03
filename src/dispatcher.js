@@ -1,3 +1,4 @@
+//TODO: This script is borked now. My guess is that it won't create new jobs due to a thread leak
 const HACK_COST = 1.75;
 const HACK = "hack";
 const GROW = "grow";
@@ -10,7 +11,8 @@ export async function main(ns) {
     let network = analyze_network(ns, 15);
     let pservers = network.purchasedServers;
     let nservers = network.networkServers;
-    let workers = pservers.concat(nservers);
+    // let workers = pservers.concat(nservers);
+    let workers = ["n00dles"];
 
     let threadpool = calculate_threadpool(ns, workers);
     await ns.sleep(1000);
@@ -19,14 +21,14 @@ export async function main(ns) {
         let network = analyze_network(ns, 15);
         let pservers = network.purchasedServers;
         let nservers = network.networkServers;
-        let workers = pservers.concat(nservers);
-
+        // let workers = pservers.concat(nservers);
+        let workers = ["n00dles"];
         threadpool = calculate_threadpool(ns, workers, threadpool);
 
         // determine top 5 ideal targets
-        let optimalTargets = calculate_optimal_target(ns, nservers, 20);
-
-        for (let i = 0; i < 20; i++) {
+        // let optimalTargets = calculate_optimal_target(ns, nservers, 5);
+        let optimalTargets = ["n00dles"];
+        // for (let i = 0; i < 20; i++) {
             // for each ideal target
             for (const target of optimalTargets) {
                 let moneyThresh = ns.getServerMaxMoney(target) * 0.9;
@@ -35,27 +37,39 @@ export async function main(ns) {
                 let wthreads = (ns.getServerSecurityLevel(target) - securityThresh) / WEAKEN_STRENGTH; // weakens by 0.05 per thread. easy calc
                 let gthreads = ns.growthAnalyze(target, Math.ceil((moneyThresh+1)/(moneyAvailable+1)));
                 let hthreads = ns.hackAnalyzeThreads(target, Math.ceil(moneyThresh * 0.5));
-                // if (!target in threadpool.allocations) {
-                //     threadpool.allocations[target] = {};
-                // }
+
+                // add the viable allocation if necessary
+                if (!(target in threadpool.allocations)) {
+                    threadpool.allocations[target] = {
+                        jobs: [],
+                        weaken: 0,
+                        grow: 0,
+                        hack: 0,
+                    };
+                }
+
+                ns.tprint(target);
+                ns.tprint(threadpool.allocations[target].jobs);
 
                 // if not enough threads allocated
                 // if above the security threshold
-                if (ns.getServerSecurityLevel(target) > securityThresh) {
-                    allocate_worker_threads(ns, threadpool, WEAKEN, target, Math.ceil(wthreads));
+                if (threadpool.allocations[target].weaken < wthreads && ns.getServerSecurityLevel(target) > securityThresh) {
+                    allocate_worker_threads(ns, threadpool, WEAKEN, target, Math.ceil(wthreads - threadpool.allocations[target].weaken));
                     continue;
                 }
                 // if below the money threshold
-                if (gthreads && moneyAvailable < moneyThresh) {
+                if (threadpool.allocations[target].grow < gthreads && moneyAvailable < moneyThresh) {
                     // determine grow threads needed
-                    allocate_worker_threads(ns, threadpool, GROW, target, Math.ceil(gthreads));
+                    allocate_worker_threads(ns, threadpool, GROW, target, Math.ceil(gthreads - threadpool.allocations[target].grow));
                     continue;
                 }
                 // determine hack threads needed to hack half the money
-                allocate_worker_threads(ns, threadpool, HACK, target, Math.ceil(hthreads));
+                if (threadpool.allocations[target].hack < hthreads) {
+                    allocate_worker_threads(ns, threadpool, HACK, target, Math.ceil(hthreads));
+                }
             }
             await ns.sleep(1000);
-        }
+        // }
     }
 }
 
@@ -89,12 +103,16 @@ function allocate_worker_threads(ns, threadpool, action, target, threadcount) {
         // if the allocation is smaller, then we're done. Exec and break out.
         if (allocation <= worker.availableThreads) {
             worker.availableThreads -= allocation;
+            threadpool.allocations[target][action] += allocation;
+            threadpool.allocations[target].jobs.push({action: action, threads: allocation, startTime: performance.now(), duration: actionTime});
             ns.exec(action+".js", worker.name, allocation, target);
             allocation = 0;
 
         // if the available threads is smaller, use em all up and loop to the next worker
         } else {
             allocation -= worker.availableThreads;
+            threadpool.allocations[target][action] += worker.availableThreads;
+            threadpool.allocations[target].jobs.push({action: action, threads: worker.availableThreads, startTime: performance.now(), duration: actionTime});
             ns.exec(action+".js", worker.name, worker.availableThreads, target);
             worker.availableThreads = 0;
             i += 1;
@@ -105,27 +123,6 @@ function allocate_worker_threads(ns, threadpool, action, target, threadcount) {
 /** @param {NS} ns */
 function calculate_threadpool(ns, workers, threadpool={workers: [],allocations: {},totalThreads: 0,availableThreads: 0,}) {
 
-    // each batch should add a job to this list.
-    // each loop should check for completed jobs and remove the threadcounts from their proper places
-    // the allocation should only happen in the first place if there aren't enough jobs with threads still occurring
-    let allocations = {
-        "n00dles": {
-            "jobs": [{
-                    "action": "weaken",
-                    "threads": 35,
-                    "duration": 35000,
-                },
-                {
-                    "action": "grow",
-                    "threads": 10,
-                    "duration": 15000,
-                }
-
-            ],
-            "threads": 45,
-        }
-    };
-
     // build thread pool
     for (const worker of workers) {
         let maxRam = ns.getServerMaxRam(worker)
@@ -135,6 +132,26 @@ function calculate_threadpool(ns, workers, threadpool={workers: [],allocations: 
         threadpool.workers.push({name: worker, availableThreads: availableThreads});
         threadpool.totalThreads += maxThreads;
         threadpool.availableThreads += maxThreads;
+    }
+
+    // remove any jobs that are completed
+    for(const target in threadpool.allocations) {
+        // iterate through the jobs
+        let finishedJobs = [];
+        for (let i = 0; i < threadpool.allocations[target].jobs.length; i++) {
+            let job = threadpool.allocations[target].jobs[i];
+            let startTime = job.startTime;
+            let duration = job.duration;
+            let now = performance.now();
+            let elapsed = now - startTime;
+            if (elapsed > duration) {
+                finishedJobs.push(i);
+                threadpool.allocations[target][job.action] -= job.threads;
+            }
+        }
+        for (const job of finishedJobs) {
+            threadpool.allocations[target].jobs = threadpool.allocations[target].jobs.splice(job, 1);
+        }
     }
 
     return threadpool;
@@ -161,10 +178,10 @@ for(const server of targets) {
 
 // sort descending
 viableTargets.sort(function(a, b){return b.maxMoney - a.maxMoney});
-ns.tprint("Top "+topx+" targets are: "+viableTargets.slice(0,topx).map(e => e.server));
+// ns.tprint("Top "+topx+" targets are: "+viableTargets.slice(0,topx).map(e => e.server));
 if (topx > viableTargets.length) {
     topx = viableTargets.length;
-    ns.tprint("There are not enough targets. Capping at "+topx+" instead");
+    // ns.tprint("There are not enough targets. Capping at "+topx+" instead");
 }
 // strip out the maxMoney parameter and return just the servers
 return viableTargets.slice(0,topx).map(e => e.server);

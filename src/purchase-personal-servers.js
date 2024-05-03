@@ -1,8 +1,9 @@
+const startingRam = 8;
+
 /** @param {NS} ns */
 export async function main(ns) {
     // How much RAM each purchased server will have. In this case, it'll
     // be 8GB.
-    const startingRam = 8;
     let botnet = "squadron-hack.js";
     let serverLimit = ns.getPurchasedServerLimit();
     await purchase_starting_set(ns, serverLimit, startingRam, botnet);
