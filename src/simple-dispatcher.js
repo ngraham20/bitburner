@@ -19,6 +19,7 @@ export async function main(ns) {
         for (const target of nservers) {
             add_target(ns, threadpool, target);
         }
+        add_target(ns, threadpool, "n00dles");
         monitor_jobs(ns, threadpool);
         determine_assignment(ns, threadpool);
         await ns.sleep(1000);
@@ -102,7 +103,8 @@ function calculate_optimal_targets(ns, targets, topx) {
 /** @param {NS} ns */
 function determine_assignment(ns, threadpool) {
     // pick a target
-    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 15);
+    // TODO: make this updatable with a port read
+    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 5);
     // pick an action
     for (const target of optimalTargets) {
         // ns.tprint("Dispatching for target: "+target);
