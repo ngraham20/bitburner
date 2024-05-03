@@ -46,9 +46,7 @@ async function purchase_starting_set(ns, limit, ram, botnet) {
             //  3. Run our hacking script on the newly-purchased server with 3 threads
             //  4. Increment our iterator to indicate that we've bought a new server
             let hostname = ns.purchaseServer("pserv-" + i, startingRam);
-            ns.print("Accessing: " + hostname);
-            ns.scp(botnet, hostname);
-            ns.exec(botnet, hostname, 3);
+            initialize(ns, hostname);
             ++i;
           }
 
@@ -59,17 +57,11 @@ async function purchase_starting_set(ns, limit, ram, botnet) {
 }
 
 /** @param {NS} ns */
-function initialize(ns, con, squad) {
-    let botnet = "squadron-hack.js";
-    let maxRam = ns.getServerMaxRam(con);
-    let requiredRam = ns.getScriptRam(botnet, "home");
-    let numThreads = 0;
-    if (requiredRam) {
-        numThreads = Math.trunc(maxRam / requiredRam);
-    }
-    if (numThreads) {
-        ns.scp(botnet, con);
-        ns.killall(con);
-        ns.exec(botnet, con, numThreads, squad);
-    }
+function initialize(ns, con) {
+    ns.print("Accessing: " + con);
+        
+    ns.scp("weaken.js", con);
+    ns.scp("grow.js", con);
+    ns.scp("hack.js", con);
+    ns.killall(con);
 }

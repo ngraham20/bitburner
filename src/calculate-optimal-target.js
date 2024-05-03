@@ -26,12 +26,17 @@ export async function main(ns) {
     }
   }
 
+  let topx = ns.args[0] || 10;
   // sort ascending
   viableTargets.sort(function(a, b){return a.maxMoney - b.maxMoney});
-  ns.tprint("Top ten targets are: ");
-  for (let i = 0; i < 10; i++) {
+  ns.tprint("Top "+topx+" targets are: ");
+  if (topx > viableTargets.length) {
+    topx = viableTargets.length;
+    ns.tprint("There are not enough targets. Capping at "+topx+" instead");
+  }
+  for (let i = 0; i < topx; i++) {
     let target = viableTargets.pop().server;
-    ns.tprint("Rank :"+(i+1)+" "+target);
+    ns.tprint("Rank "+(i+1)+": "+target);
     ns.write("target-ranks.txt", target +"\n", "a");
   }
 }

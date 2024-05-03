@@ -11,11 +11,13 @@ export async function main(ns) {
         ns.rm("level" + i + "servers.txt");
     }
     ns.rm("purchased-servers.txt");
+    ns.rm("available-servers.txt");
 
     analyze(ns, context);
     ns.write("paths.txt", JSON.stringify(context.path), "w");
 }
 
+/** @param {NS} ns */
 function analyze(ns, ctx) {
     // for each depth asked for
     for (let depth = 0; depth < ctx.maxdepth; depth++) {
@@ -36,6 +38,11 @@ function analyze(ns, ctx) {
                 if (!ctx.visited.includes(con)) {
                     ns.tprint("Discovered: " + con);
                     ns.tprint("Depth: " + (depth + 1));
+                    
+                    if (ns.hasRootAccess(con)) {
+                        ns.write("available-servers.txt", con+"\n", "a");
+                    }
+
                     ctx.visited.push(con);
                     ctx.path[depth + 1][con] = ctx.path[depth][home] + ">" + con;
                     ns.write("level" + lvl + "servers.txt", con + "\n", "a");

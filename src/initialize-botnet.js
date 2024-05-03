@@ -5,17 +5,14 @@ export async function main(ns) {
     let maxlevel = 5;
 
     let i = 0;
-    let squad = 0;
 
     // skip portcracks for level 0 servers
     let lvlfile = ns.read("level"+i+"servers.txt");
     let lvlconnections = lvlfile.split(/\n/);
     for (const con of lvlconnections) {
         if (con) {
-            ns.print("Accessing: " + con);
             ns.nuke(con);
-            initialize(ns, con, squad);
-            squad = (squad + 1) % 10;
+            initialize(ns, con);
         }
     }
     
@@ -27,7 +24,6 @@ export async function main(ns) {
         let lvlconnections = lvlfile.split(/\n/);
         for (const con of lvlconnections) {
             if (con) {
-                ns.print("Accessing: " + con);
 
                 // execute all cracks up to the current level
                 for(let program = 0; program < level; program++) {
@@ -36,24 +32,17 @@ export async function main(ns) {
 
                 // finally, nuke and initialize
                 ns.nuke(con);
-                initialize(ns, con, squad);
-                squad = (squad + 1) % 10;
+                initialize(ns, con);
             }
         }
     }
 }
 /** @param {NS} ns */
-function initialize(ns, con, squad) {
-    let botnet = "squadron-hack.js";
-    let maxRam = ns.getServerMaxRam(con);
-    let requiredRam = ns.getScriptRam(botnet, "home");
-    let numThreads = 0;
-    if (requiredRam) {
-        numThreads = Math.trunc(maxRam / requiredRam);
-    }
-    if (numThreads) {
-        ns.scp(botnet, con);
-        ns.killall(con);
-        ns.exec(botnet, con, numThreads, squad);
-    }
+function initialize(ns, con) {
+    ns.print("Accessing: " + con);
+        
+    ns.scp("weaken.js", con);
+    ns.scp("grow.js", con);
+    ns.scp("hack.js", con);
+    ns.killall(con);
 }

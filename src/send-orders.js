@@ -15,9 +15,11 @@ export async function main(ns) {
     if (orders == "distribute") {
       let targets = ns.read("target-ranks.txt").split(/\n/);
       targets.pop(); // remove the trailing "\n"
-      for (let i = 0; i < targets.length; i++) {
+      for (let i = 0; i < squardports.length; i++) {
         let port = squadports[i];
-        let target = targets[i];
+
+        // iterate across all squads, but distribute each ranked server evenly
+        let target = targets[(i % targets.length)];
         ns.tprint("Squad "+i+": "+target);
         ns.clearPort(port);
         ns.writePort(port, target);
