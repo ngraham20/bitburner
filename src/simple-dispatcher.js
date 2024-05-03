@@ -1,4 +1,4 @@
-const HACK_COST = 1.75;
+const ACTION_COST = 1.75;
 const HACK = "hack";
 const GROW = "grow";
 const WEAKEN = "weaken";
@@ -11,15 +11,11 @@ export async function main(ns) {
 
     let threadpool = new_threadpool()
 
-    threadpool.allocations[target] = {
-        jobs: [],
-        weaken: 0,
-        grow: 0,
-        hack: 0,
-    };
-
-    dispatch(ns, threadpool, HACK, worker, target, 1);
-    dispatch(ns, threadpool, HACK, worker, target, 1);
+    add_worker(ns, threadpool, worker);
+    add_target(threadpool, target);
+    
+    assign_worker_threads(ns, threadpool, HACK, worker, target, 1);
+    assign_worker_threads(ns, threadpool, HACK, worker, target, 1);
 
     while (true) {
         monitor_jobs(ns, threadpool, target)
@@ -29,6 +25,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 function monitor_jobs(ns, threadpool, target) {
+    let finishedJobs = [];
     for (let i = 0; i < threadpool.allocations[target].jobs.length; i++) {
         let now = performance.now();
         let job = threadpool.allocations[target].jobs[i]
@@ -36,14 +33,17 @@ function monitor_jobs(ns, threadpool, target) {
         let remaining = job.duration - elapsed;
         if (elapsed > job.duration) {
             ns.toast(job.action+" job completed on "+job.worker+" with target: "+target);
-            remove_job(ns, threadpool, target, i);
-        } else {
-            ns.tprint("-----");
-            ns.tprint(target);
-            ns.tprint("Remaining: "+remaining);
-            ns.tprint("Job: "+job.action);
-            ns.tprint(job.action+" threads: "+threadpool.allocations[target][job.action]);
+            finishedJobs.push(job);
         }
+
+        ns.tprint("-----");
+        ns.tprint(target);
+        ns.tprint("Remaining: "+remaining);
+        ns.tprint("Job: "+job.action);
+        ns.tprint(job.action+" threads: "+threadpool.allocations[target][job.action]);
+    }
+    for (let job in finishedJobs) {
+        remove_job(threadpool, target, job);
     }
     if (threadpool.allocations[target].jobs.length == 0) {
         ns.toast("no more jobs. Exiting");
@@ -52,16 +52,33 @@ function monitor_jobs(ns, threadpool, target) {
 }
 
 /** @param {NS} ns */
-function dispatch(ns, threadpool, action, worker, target, threads) {
+function add_worker(ns, threadpool, worker) {
+    let maxThreads = Math.floor(ns.getServerMaxRam(worker) / ACTION_COST);
+    threadpool.workers.push({
+        name: worker,
+        availableThreads: maxThreads
+    })
+}
+
+function add_target(threadpool, target) {
+    threadpool.allocations[target] = {
+        jobs: [],
+        weaken: 0,
+        grow: 0,
+        hack: 0,
+    };
+}
+
+/** @param {NS} ns */
+function assign_worker_threads(ns, threadpool, action, worker, target, threads) {
     ns.exec(action+".js", worker, {threads: threads, temporary:true}, target);
     add_job(ns, threadpool, action, worker, target, threads);
 }
 
-/** @param {NS} ns */
-function remove_job(ns, threadpool, target, index) {
-    let job = threadpool.allocations[target].jobs[index];
+function remove_job(threadpool, target, job) {
     let action = job.action;
     let threads = job.threads;
+    let index = threadpool.allocations[target].jobs.indexOf(job);
     threadpool.allocations[target].jobs.splice(index, 1);
     threadpool.allocations[target][action] -= threads;
 }
