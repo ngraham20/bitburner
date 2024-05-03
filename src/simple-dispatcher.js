@@ -6,19 +6,7 @@ const WEAKEN_STRENGTH = 0.05;
 
 /** @param {NS} ns */
 export async function main(ns) {
-    let workers = ["n00dles", "joesguns", "foodnstuff"];
-    let targets = ["n00dles", "foodnstuff"];
-
     let threadpool = new_threadpool()
-
-    for (const worker of workers) {
-        add_worker(ns, threadpool, worker);
-    }
-
-    for (const target of targets) {
-        add_target(ns, threadpool, target);
-    }
-
     while (true) {
         let network = analyze_network(ns, 15);
         let pservers = network.purchasedServers;
@@ -114,7 +102,7 @@ function calculate_optimal_targets(ns, targets, topx) {
 /** @param {NS} ns */
 function determine_assignment(ns, threadpool) {
     // pick a target
-    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 5);
+    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 15);
     // pick an action
     for (const target of optimalTargets) {
         // ns.tprint("Dispatching for target: "+target);
@@ -181,30 +169,6 @@ function dispatch(ns, threadpool, action, target, threads) {
     }
 }
 
-function pick_action(ns, target) {
-    let moneyThresh = ns.getServerMaxMoney(target) * 0.9;
-    let securityThresh = ns.getServerMinSecurityLevel(target) + 5;
-    let moneyAvailable = ns.getServerMoneyAvailable(target);
-    let wthreads = (ns.getServerSecurityLevel(target) - securityThresh) / WEAKEN_STRENGTH; // weakens by 0.05 per thread. easy calc
-    let gthreads = ns.growthAnalyze(target, Math.ceil((moneyThresh+1)/(moneyAvailable+1)));
-    let hthreads = ns.hackAnalyzeThreads(target, Math.ceil(moneyThresh * 0.5));
-
-    // if not enough threads allocated
-    // if above the security threshold
-    if (threadpool.allocations[target].weaken < wthreads && ns.getServerSecurityLevel(target) > securityThresh) {
-        allocate_worker_threads(ns, threadpool, WEAKEN, target, Math.ceil(wthreads - threadpool.allocations[target].weaken));
-    }
-    // if below the money threshold
-    if (threadpool.allocations[target].grow < gthreads && moneyAvailable < moneyThresh) {
-        // determine grow threads needed
-        allocate_worker_threads(ns, threadpool, GROW, target, Math.ceil(gthreads - threadpool.allocations[target].grow));
-    }
-    // determine hack threads needed to hack half the money
-    if (threadpool.allocations[target].hack < hthreads) {
-        allocate_worker_threads(ns, threadpool, HACK, target, Math.ceil(hthreads - threadpool.allocations[target].hack));
-    }
-}
-
 /** @param {NS} ns */
 function monitor_jobs(ns, threadpool) {
     for (const target of threadpool.targets) {
@@ -219,13 +183,13 @@ function monitor_jobs(ns, threadpool) {
                 finishedJobs.push(job);
             }
 
-            ns.tprint("-----");
-            ns.tprint("i: "+i);
-            ns.tprint("worker: "+job.worker);
-            ns.tprint(target);
-            ns.tprint("Remaining: "+remaining);
-            ns.tprint("Job: "+job.action);
-            ns.tprint(job.action+" threads: "+threadpool.allocations[target][job.action]);
+            // ns.tprint("-----");
+            // ns.tprint("i: "+i);
+            // ns.tprint("worker: "+job.worker);
+            // ns.tprint(target);
+            // ns.tprint("Remaining: "+remaining);
+            // ns.tprint("Job: "+job.action);
+            // ns.tprint(job.action+" threads: "+threadpool.allocations[target][job.action]);
         }
         for (let job of finishedJobs) {
             remove_job(threadpool, target, job);
@@ -239,12 +203,25 @@ function monitor_jobs(ns, threadpool) {
 
 /** @param {NS} ns */
 function add_worker(ns, threadpool, worker) {
+    let maxRam = ns.getServerMaxRam(worker);
     if (!(worker in threadpool.workers)) {
-        let maxThreads = Math.floor(ns.getServerMaxRam(worker) / ACTION_COST);
-        ns.tprint("Max threads for this worker: "+maxThreads);
+        let maxThreads = Math.floor(maxRam / ACTION_COST);
+        ns.tprint("New worker: "+worker+" with threads: "+maxThreads);
         threadpool.workers[worker] = maxThreads;
         threadpool.totalThreads += maxThreads;
         threadpool.availableThreads += maxThreads;
+    }
+    let pservUpdated = false;
+    if (worker.substring(0,5) == "pserv") {
+        let pservRam = ns.getServerMaxRam(worker);
+        if (pservRam > maxRam) {
+            // server has been updated
+            let maxThreads = Math.floor(pservRam / ACTION_COST);
+            ns.tprint("New worker: "+worker+" with threads: "+maxThreads);
+            threadpool.workers[worker] = maxThreads;
+            threadpool.totalThreads += maxThreads;
+            threadpool.availableThreads += maxThreads;
+        }
     }
 }
 
