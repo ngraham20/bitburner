@@ -8,12 +8,12 @@ export async function main(ns) {
     let serverLimit = ns.getPurchasedServerLimit();
     await purchase_starting_set(ns, serverLimit, startingRam, botnet);
 
-    // one by one, upgrade each server until each is 256GB
+    // one by one, upgrade each server until each is 1024GB
     
     let startingserver = 0;
     let largestram = 8;
     let smallestram = 8;
-    let maximumram = 256;
+    let maximumram = 1024;
 
     let currentram = startingRam * 2;
     // determine where in the process we are for resuming purposes
@@ -26,7 +26,6 @@ export async function main(ns) {
             // only use 1/6 of the total available money to upgrade servers
             if (ns.getServerMoneyAvailable("home") / 6 > ns.getPurchasedServerUpgradeCost(hostname, currentram)) {
                 ns.upgradePurchasedServer(hostname, currentram);
-                initialize(ns, hostname, server % 10);
                 server++;
             }
             //Make the script wait for a second before looping again.
