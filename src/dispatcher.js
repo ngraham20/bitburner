@@ -112,7 +112,7 @@ function receive_orders(ns) {
 function determine_assignment(ns, threadpool) {
     // pick a target
     // TODO: make this updatable with a port read
-    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 10);
+    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 20);
     // let optimalTargets = ["n00dles"];
     // pick an action
     for (const target of optimalTargets) {
