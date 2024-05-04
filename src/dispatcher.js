@@ -21,7 +21,7 @@ export async function main(ns) {
         }
         monitor_jobs(ns, threadpool);
         determine_assignment(ns, threadpool);
-        await ns.sleep(100000);
+        await ns.sleep(1000);
     }
 }
 
@@ -125,10 +125,17 @@ function determine_assignment(ns, threadpool) {
         let hthreads = Math.ceil(ns.hackAnalyzeThreads(target, Math.ceil(moneyThresh * 0.5)));
         let allocations = threadpool.allocations[target];
 
-        ns.tprint("Target: "+target);
-        ns.tprint("Threads needed to weaken: "+wthreads);
-        ns.tprint("Threads needed to grow: "+gthreads);
-        ns.tprint("Threads needed to hack: "+hthreads);
+        // ns.tprint("----- ASSIGNMENT -----");
+        // ns.tprint("----- BEFORE -----")
+        // ns.tprint("Target: "+target);
+        // ns.tprint("Total available threads: "+threadpool.availableThreads);
+        // ns.tprint("Threads needed to weaken: "+wthreads);
+        // ns.tprint("Threads needed to grow: "+gthreads);
+        // ns.tprint("Threads needed to hack: "+hthreads);
+        // ns.tprint("-----");
+        // ns.tprint("Threads weakening "+target+": "+allocations.weaken);
+        // ns.tprint("Threads growing "+target+": "+allocations.grow);
+        // ns.tprint("Threads hacking "+target+": "+allocations.hack);
 
         // if not enough threads allocated
         // if above the security threshold
@@ -145,22 +152,24 @@ function determine_assignment(ns, threadpool) {
             dispatch(ns, threadpool, HACK, target, hthreads - allocations.hack);
         }
 
-        ns.tprint("Threads weakening "+target+": "+allocations.weaken);
-        ns.tprint("Threads growing "+target+": "+allocations.grow);
-        ns.tprint("Threads hacking "+target+": "+allocations.hack);
+        // ns.tprint("----- AFTER -----")
+        // ns.tprint("Threads weakening "+target+": "+allocations.weaken);
+        // ns.tprint("Threads growing "+target+": "+allocations.grow);
+        // ns.tprint("Threads hacking "+target+": "+allocations.hack);
     }
 }
 
 /** @param {NS} ns */
 function dispatch(ns, threadpool, action, target, threads) {
-    // ns.tprint("Dispatching");
-    // ns.tprint("requested threads: "+threads);
+
+    // ns.tprint("----- DISPATCH -----");
+    // ns.tprint("Requested threads: "+threads);
     // don't allocate more than 5% resources to a single dispatch
     let maxAllocation = Math.ceil(threadpool.totalThreads * 0.05);
-    // ns.tprint("max allocation: "+maxAllocation);
+    // ns.tprint("Max allocation: "+maxAllocation);
     // the allocation is the smallest of the request, the max, and the available
     let allocation = Math.min(threads, maxAllocation, threadpool.availableThreads);
-    // ns.tprint("actual allocation: "+allocation);
+    // ns.tprint("Actual allocation: "+allocation);
     // filter for workers with threads remaining
     let availableWorkers = [];
     for (const worker in threadpool.workers) {
@@ -175,15 +184,21 @@ function dispatch(ns, threadpool, action, target, threads) {
     let i = 0;
     while (allocation > 0 && i < availableWorkers.length) {
         let worker = availableWorkers[i];
+        let availableThreads = threadpool.workers[worker].available
+
+        // ns.tprint("----- ALLOCATION -----");
+        // ns.tprint("Worker: "+worker);
+        // ns.tprint("Available therads: "+availableThreads);
         // if the allocation is smaller, then we're done. Exec and break out.
-        if (allocation <= threadpool.workers[worker].available) {
+        if (allocation <= availableThreads) {
             assign_worker_threads(ns, threadpool, action, worker, target, allocation);
             allocation = 0;
 
         // if the available threads is smaller, use em all up and loop to the next worker
         } else {
-            assign_worker_threads(ns, threadpool, action, worker, target, threadpool.workers[worker].available);
+            assign_worker_threads(ns, threadpool, action, worker, target, availableThreads);
             threadpool.workers[worker].available = 0;
+            allocation -= availableThreads;
             i += 1;
         }
     }
