@@ -1,5 +1,6 @@
 /** @param {NS} ns */
 export async function main(ns) {
+    ns.exec("analyze-network.js", "home", 1, 15);
     let porthackfiles = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
     let portcracks = [ns.brutessh, ns.ftpcrack, ns.relaysmtp, ns.httpworm, ns.sqlinject];
     let maxlevel = 5;
