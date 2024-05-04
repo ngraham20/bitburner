@@ -148,7 +148,7 @@ function dispatch(ns, threadpool, action, target, threads) {
     let availableWorkers = [];
     for (const worker in threadpool.workers) {
         // ns.tprint(worker);
-        if (threadpool.workers[worker] > 0) {
+        if (threadpool.workers[worker].available > 0) {
             availableWorkers.push(worker);
         }
     }
@@ -159,14 +159,14 @@ function dispatch(ns, threadpool, action, target, threads) {
     while (allocation > 0 && i < availableWorkers.length) {
         let worker = availableWorkers[i];
         // if the allocation is smaller, then we're done. Exec and break out.
-        if (allocation <= threadpool.workers[worker]) {
+        if (allocation <= threadpool.workers[worker].available) {
             assign_worker_threads(ns, threadpool, action, worker, target, allocation);
             allocation = 0;
 
         // if the available threads is smaller, use em all up and loop to the next worker
         } else {
-            assign_worker_threads(ns, threadpool, action, worker, target, threadpool.workers[worker]);
-            threadpool.workers[worker] = 0;
+            assign_worker_threads(ns, threadpool, action, worker, target, threadpool.workers[worker].available);
+            threadpool.workers[worker].available = 0;
             i += 1;
         }
     }
@@ -210,23 +210,25 @@ function add_worker(ns, threadpool, worker) {
     if (!(worker in threadpool.workers)) {
         let maxThreads = Math.floor(maxRam / ACTION_COST);
         ns.tprint("New worker: "+worker+" with threads: "+maxThreads);
-        threadpool.workers[worker] = maxThreads;
+        threadpool.workers[worker] = {max: maxThreads, available: maxThreads};
         threadpool.totalThreads += maxThreads;
         threadpool.availableThreads += maxThreads;
     }
-    // if (worker.substring(0,5) == "pserv") {
-    //     let oldPservThreads = threadpool.workers[worker];
-    //     let pservThreads = Math.floor(maxRam / ACTION_COST);
-    //     ns.tprint("Old: "+oldPservThreads);
-    //     ns.tprint("New: "+pservThreads);
-    //     if (pservThreads > oldPservThreads) {
-    //         // server has been updated
-    //         ns.tprint("New worker: "+worker+" with threads: "+pservThreads);
-    //         threadpool.workers[worker] = pservThreads;
-    //         threadpool.totalThreads += pservThreads;
-    //         threadpool.availableThreads += pservThreads;
-    //     }
-    // }
+
+    if (worker.substring(0,5) == "pserv") {
+        let oldPservMaxThreads = threadpool.workers[worker].max;
+        let oldPservAvailableThreads = threadpool.workers[worker].available;
+        let oldPservThreadsInUse = oldPservMaxThreads - oldPservAvailableThreads;
+        let pservMaxThreads = Math.floor(maxRam / ACTION_COST);
+        if (pservMaxThreads > oldPservMaxThreads) {
+            // server has been updated
+            ns.tprint("New worker: "+worker+" with threads: "+pservMaxThreads);
+            threadpool.workers[worker].max = pservMaxThreads;
+            threadpool.workers[worker].available = pservMaxThreads - oldPservThreadsInUse;
+            threadpool.totalThreads += pservMaxThreads - oldPservMaxThreads;
+            threadpool.availableThreads += pservMaxThreads - oldPservThreadsInUse;
+        }
+    }
 }
 
 /** @param {NS} ns */
@@ -255,7 +257,7 @@ function remove_job(threadpool, target, job) {
     let index = threadpool.allocations[target].jobs.indexOf(job);
     threadpool.allocations[target].jobs.splice(index, 1);
     threadpool.allocations[target][action] -= threads;
-    threadpool.workers[job.worker] += threads;
+    threadpool.workers[job.worker].available += threads;
     threadpool.availableThreads += threads;
 }
 
@@ -277,13 +279,13 @@ function add_job(ns, threadpool, action, worker, target, threads) {
     let job = {action: action, worker:worker, threads: threads, startTime: performance.now(), duration: actionTime};
     threadpool.allocations[target].jobs.push(job);
     threadpool.allocations[target][action] += threads;
-    threadpool.workers[worker] -= threads;
+    threadpool.workers[worker].available -= threads;
     threadpool.availableThreads -= threads;
 }
 
 function new_threadpool() {
     let threadpool = {
-        workers: [],
+        workers: {},
         targets: [],
         allocations: {},
         totalThreads: 0,
