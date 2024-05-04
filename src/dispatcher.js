@@ -4,6 +4,8 @@ const GROW = "grow";
 const WEAKEN = "weaken";
 const WEAKEN_STRENGTH = 0.05;
 
+// TODO: somethingg isn't quite working right. use send-orders to analyze a single server's threads at a time instead of the whole botnet at once
+
 /** @param {NS} ns */
 export async function main(ns) {
     let threadpool = new_threadpool()
@@ -188,7 +190,7 @@ function dispatch(ns, threadpool, action, target, threads) {
 
         // ns.tprint("----- ALLOCATION -----");
         // ns.tprint("Worker: "+worker);
-        // ns.tprint("Available therads: "+availableThreads);
+        // ns.tprint("Available threads: "+availableThreads);
         // if the allocation is smaller, then we're done. Exec and break out.
         if (allocation <= availableThreads) {
             assign_worker_threads(ns, threadpool, action, worker, target, allocation);
@@ -197,7 +199,7 @@ function dispatch(ns, threadpool, action, target, threads) {
         // if the available threads is smaller, use em all up and loop to the next worker
         } else {
             assign_worker_threads(ns, threadpool, action, worker, target, availableThreads);
-            threadpool.workers[worker].available = 0;
+            // threadpool.workers[worker].available = 0;
             allocation -= availableThreads;
             i += 1;
         }
@@ -227,7 +229,7 @@ function monitor_jobs(ns, threadpool) {
             // ns.tprint(job.action+" threads: "+threadpool.allocations[target][job.action]);
         }
         for (let job of finishedJobs) {
-            remove_job(threadpool, target, job);
+            remove_job(ns, threadpool, target, job);
         }
         // if (threadpool.allocations[target].jobs.length == 0) {
         //     ns.toast("no more jobs. Exiting");
@@ -283,14 +285,25 @@ function assign_worker_threads(ns, threadpool, action, worker, target, threads) 
     add_job(ns, threadpool, action, worker, target, threads);
 }
 
-function remove_job(threadpool, target, job) {
+function remove_job(ns, threadpool, target, job) {
+    let worker = job.worker;
     let action = job.action;
     let threads = job.threads;
     let index = threadpool.allocations[target].jobs.indexOf(job);
+
+    ns.tprint("----- JOB REMOVE -----");
+    ns.tprint("Worker: "+worker);
+    ns.tprint("Target: "+target);
+    ns.tprint("Action: "+action);
+    ns.tprint("Threads: "+threads);
+    ns.tprint("Total threads before removal: "+threadpool.availableThreads);
+
     threadpool.allocations[target].jobs.splice(index, 1);
     threadpool.allocations[target][action] -= threads;
-    threadpool.workers[job.worker].available += threads;
+    threadpool.workers[worker].available += threads;
     threadpool.availableThreads += threads;
+
+    ns.tprint("Total threads after removal: "+threadpool.availableThreads);
 }
 
 
@@ -309,7 +322,13 @@ function add_job(ns, threadpool, action, worker, target, threads) {
             break;
     }
     let job = {action: action, worker:worker, threads: threads, startTime: performance.now(), duration: actionTime};
-    threadpool.allocations[action] += threads;
+
+    // ns.tprint("----- JOB ADD -----");
+    // ns.tprint("Worker: "+worker);
+    // ns.tprint("Target: "+target);
+    // ns.tprint("Action: "+action);
+    // ns.tprint("Threads: "+threads);
+
     threadpool.allocations[target].jobs.push(job);
     threadpool.allocations[target][action] += threads;
     threadpool.workers[worker].available -= threads;
