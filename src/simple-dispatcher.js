@@ -105,6 +105,7 @@ function determine_assignment(ns, threadpool) {
     // pick a target
     // TODO: make this updatable with a port read
     let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 5);
+    // let optimalTargets = ["n00dles"];
     // pick an action
     for (const target of optimalTargets) {
         // ns.tprint("Dispatching for target: "+target);
@@ -213,18 +214,19 @@ function add_worker(ns, threadpool, worker) {
         threadpool.totalThreads += maxThreads;
         threadpool.availableThreads += maxThreads;
     }
-    let pservUpdated = false;
-    if (worker.substring(0,5) == "pserv") {
-        let pservRam = ns.getServerMaxRam(worker);
-        if (pservRam > maxRam) {
-            // server has been updated
-            let maxThreads = Math.floor(pservRam / ACTION_COST);
-            ns.tprint("New worker: "+worker+" with threads: "+maxThreads);
-            threadpool.workers[worker] = maxThreads;
-            threadpool.totalThreads += maxThreads;
-            threadpool.availableThreads += maxThreads;
-        }
-    }
+    // if (worker.substring(0,5) == "pserv") {
+    //     let oldPservThreads = threadpool.workers[worker];
+    //     let pservThreads = Math.floor(maxRam / ACTION_COST);
+    //     ns.tprint("Old: "+oldPservThreads);
+    //     ns.tprint("New: "+pservThreads);
+    //     if (pservThreads > oldPservThreads) {
+    //         // server has been updated
+    //         ns.tprint("New worker: "+worker+" with threads: "+pservThreads);
+    //         threadpool.workers[worker] = pservThreads;
+    //         threadpool.totalThreads += pservThreads;
+    //         threadpool.availableThreads += pservThreads;
+    //     }
+    // }
 }
 
 /** @param {NS} ns */
