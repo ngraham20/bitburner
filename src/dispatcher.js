@@ -3,11 +3,19 @@ const HACK = "hack";
 const GROW = "grow";
 const WEAKEN = "weaken";
 const WEAKEN_STRENGTH = 0.05;
+var flags = {
+    debug: false,
+    targets: [],
+}
 
 /** @param {NS} ns */
 export async function main(ns) {
     let threadpool = new_threadpool()
     while (true) {
+        get_flags(ns);
+        if (flags.debug) {
+            ns.tprint(flags);
+        }
         let network = analyze_network(ns, 15);
         let pservers = network.purchasedServers;
         let rservers = network.rootedServers;
@@ -29,6 +37,17 @@ export async function main(ns) {
         await ns.sleep(1000);
     }
 }
+
+  /** @param {NS} ns */
+function get_flags(ns) {
+    let debugmode = Boolean(ns.peek(25575));
+    let targets = ns.peek(25565).split(/,/);
+    flags = {
+        debug: debugmode,
+        targets: targets,
+    }
+}
+
 
   /** @param {NS} ns */
   function analyze_network(ns, maxdepth) {
@@ -109,7 +128,7 @@ function parse_orders(ns, threadTargets) {
     // n00dles
     // top 10
     let topx = 0;
-    let targets = ns.peek(25565).split(/,/);
+    let targets = flags.targets;
     if (targets[0] == "NULL PORT DATA") {
         return calculate_optimal_targets(ns, threadTargets, 5);
     }
@@ -268,6 +287,9 @@ function add_job(ns, threadpool, action, worker, target, threads) {
 
     threadpool.allocations[target].jobs.push(job);
     threadpool.allocations[target][action] += threads;
+    if (flags.debug) {
+        ns.toast("Dispatched: "+action+" job on target: "+target);
+    }
 }
 
 function new_threadpool() {

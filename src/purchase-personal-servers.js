@@ -1,31 +1,37 @@
-const startingRam = 8;
-
 /** @param {NS} ns */
 export async function main(ns) {
     // How much RAM each purchased server will have. In this case, it'll
     // be 8GB.
-    let botnet = "squadron-hack.js";
     let serverLimit = ns.getPurchasedServerLimit();
-    await purchase_starting_set(ns, serverLimit, startingRam, botnet);
+    let numServers = ns.getPurchasedServers().length;
 
-    // one by one, upgrade each server until each is 1024GB
-    
+    if (numServers < serverLimit) {
+        await purchase_starting_set(ns, serverLimit);
+    }
+
+    // one by one, upgrade each server until each is 2048GB
+    // set currentRam to the largest RAM found among servers
+    let currentram = 8;
+    for(let i = 0; i < serverLimit; i++) {
+        let hostname = "pserv-"+i;
+        let maxram = ns.getServerMaxRam(hostname);
+        if (maxram > currentram) {
+            currentram = maxram;
+        }
+    }
     let startingserver = 0;
-    let largestram = 8;
-    let smallestram = 8;
-    let maximumram = 1024;
-
-    let currentram = startingRam * 2;
+    let maximumram = 4096;
     // determine where in the process we are for resuming purposes
-    while (currentram < maximumram+1) {
+    while (currentram <= maximumram) {
         // iterate all servers, upgrading each a single time
         let server = startingserver;
         while (server < serverLimit) {
             let hostname = "pserv-" + server;
-
             // only use 1/6 of the total available money to upgrade servers
-            if (ns.getServerMoneyAvailable("home") / 6 > ns.getPurchasedServerUpgradeCost(hostname, currentram)) {
-                ns.upgradePurchasedServer(hostname, currentram);
+            if (ns.getServerMoneyAvailable("home") / 0.1 > ns.getPurchasedServerUpgradeCost(hostname, currentram) && ns.getServerMaxRam(hostname) < currentram) {
+                    ns.upgradePurchasedServer(hostname, currentram);
+                    ns.toast("Personal Server "+hostname+" upgraded to "+currentram+"GB");
+
                 server++;
             }
             //Make the script wait for a second before looping again.
@@ -36,7 +42,8 @@ export async function main(ns) {
     }
   }
 /** @param {NS} ns */
-async function purchase_starting_set(ns, limit, ram, botnet) {
+async function purchase_starting_set(ns, limit) {
+    let startingRam = 8;
     let i = ns.getPurchasedServers().length; // resume if halted during purchasing
     while (i < limit) {
         if (ns.getServerMoneyAvailable("home") > ns.getPurchasedServerCost(ram)) {
@@ -63,5 +70,4 @@ function initialize(ns, con) {
     ns.scp("weaken.js", con);
     ns.scp("grow.js", con);
     ns.scp("hack.js", con);
-    ns.killall(con);
 }
