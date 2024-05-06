@@ -103,22 +103,35 @@ function calculate_optimal_targets(ns, targets, topx) {
 }
 
 /** @param {NS} ns */
-function receive_orders(ns) {
+function parse_orders(ns, threadTargets) {
     // possible inputs
     // n00dles,joesguns,foodnstuff
     // n00dles
     // top 10
-    let targets = ns.peek(25565);
+    let topx = 0;
+    let targets = ns.peek(25565).split(/,/);
+    if (targets[0] == "NULL PORT DATA") {
+        ns.tprint("No Orders Received. Defaulting to top 5");
+        return calculate_optimal_targets(ns, threadTargets, 5);
+    }
+    if (targets[0].slice(0,3) == "top") {
+        let topOrders = targets[0].split(/ /);
+        topx = topOrders[1];
+        ns.tprint("Orders received: Top "+topx);
+        return calculate_optimal_targets(ns, threadTargets, topx);
+    }
+
+    ns.tprint("Orders received: "+targets);
+    return targets;
 }
 
 /** @param {NS} ns */
 function determine_assignment(ns, threadpool) {
     // pick a target
-    // TODO: make this updatable with a port read
-    let optimalTargets = calculate_optimal_targets(ns, threadpool.targets, 20);
+    let targets = parse_orders(ns, threadpool.targets);
 
     // pick an action
-    for (const target of optimalTargets) {
+    for (const target of targets) {
         let moneyThresh = ns.getServerMaxMoney(target) * 0.9;
         let securityThresh = ns.getServerMinSecurityLevel(target) + 5;
         let moneyAvailable = ns.getServerMoneyAvailable(target);
@@ -188,9 +201,7 @@ function monitor_jobs(ns, threadpool) {
             let now = performance.now();
             let job = threadpool.allocations[target].jobs[i]
             let elapsed = now - job.startTime;
-            let remaining = job.duration - elapsed;
             if (elapsed > job.duration) {
-                ns.toast(job.action+" job completed on "+job.worker+" with target: "+target);
                 finishedJobs.push(job);
             }
         }
@@ -204,15 +215,12 @@ function monitor_jobs(ns, threadpool) {
 function update_worker(ns, threadpool, worker) {
     let maxRam = ns.getServerMaxRam(worker);
     let totalThreads = Math.floor(maxRam / ACTION_COST);
-    if (!(worker in threadpool.workers)) {
-        ns.tprint("New worker: "+worker+" with threads: "+totalThreads);
-    }
 
     let usedRam = ns.getServerUsedRam(worker);
     let availableRam = maxRam - usedRam;
     let availableThreads = Math.floor(availableRam / ACTION_COST);
-    threadpool.workers[worker] = {max: totalThreads, available: availableThreads};
 
+    threadpool.workers[worker] = {max: totalThreads, available: availableThreads};
     threadpool.availableThreads += availableThreads;
     threadpool.totalThreads += totalThreads;
 }
@@ -220,7 +228,6 @@ function update_worker(ns, threadpool, worker) {
 /** @param {NS} ns */
 function add_target(ns, threadpool, target) {
     if (!threadpool.targets.includes(target)) {
-        ns.tprint("Adding target: "+target);
         threadpool.targets.push(target);
         threadpool.allocations[target] = {
             jobs: [],
