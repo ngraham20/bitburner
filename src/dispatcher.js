@@ -111,18 +111,13 @@ function parse_orders(ns, threadTargets) {
     let topx = 0;
     let targets = ns.peek(25565).split(/,/);
     if (targets[0] == "NULL PORT DATA") {
-        ns.tprint("No Orders Received. Defaulting to top 5");
         return calculate_optimal_targets(ns, threadTargets, 5);
     }
-    if (targets[0].slice(0,3) == "top") {
-        let topOrders = targets[0].split(/ /);
-        topx = topOrders[1];
-        ns.tprint("Orders received: Top "+topx);
+    if (targets[0] == "top") {
+        topx = targets[1];
         return calculate_optimal_targets(ns, threadTargets, topx);
     }
-
-    ns.tprint("Orders received: "+targets);
-    return targets;
+    return calculate_optimal_targets(ns, targets, targets.length);
 }
 
 /** @param {NS} ns */
