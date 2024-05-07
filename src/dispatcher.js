@@ -5,6 +5,7 @@ const WEAKEN = "weaken";
 const WEAKEN_STRENGTH = 0.05;
 var flags = {
     debug: false,
+    grindhack: false,
     targets: [],
 }
 
@@ -43,10 +44,18 @@ function get_flags(ns) {
     if (debugmode == "NULL PORT DATA") {
         debugmode = false;
     }
+    let grindhack = ns.peek(25585);
+    if (grindhack == "NULL PORT DATA") {
+        grindhack = false;
+    }
     let targets = ns.peek(25565).split(/,/);
     flags = {
         debug: debugmode,
         targets: targets,
+        grindhack: grindhack,
+    }
+    if (debugmode) {
+        ns.tprint("Grindhack: "+grindhack+", targets: "+targets);
     }
 }
 
@@ -173,9 +182,9 @@ function determine_assignment(ns, threadpool) {
     }
 
     // // grow joesguns to pad Hack level
-    // if (threadpool.availableThreads > 0) {
-    //     dispatch(ns, threadpool, GROW, "joesguns", threadpool.availableThreads);
-    // }
+    if (flags.grindhack && threadpool.availableThreads > 0) {
+        dispatch(ns, threadpool, GROW, "joesguns", threadpool.availableThreads);
+    }
 }
 
 /** @param {NS} ns */
