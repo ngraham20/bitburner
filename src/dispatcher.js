@@ -174,12 +174,7 @@ function determine_assignment(ns, threadpool) {
 /** @param {NS} ns */
 function dispatch(ns, threadpool, action, target, threads) {
 
-    // don't allocate more than 5% resources to a single dispatch
-    let maxAllocation = Math.ceil(threadpool.totalThreads * 0.05);
-
-    // the allocation is the smallest of the request, the max, and the available
-    let allocation = Math.min(threads, maxAllocation, threadpool.availableThreads);
-
+    let allocation = threads;
     // filter for workers with threads remaining
     let availableWorkers = [];
     for (const worker in threadpool.workers) {
