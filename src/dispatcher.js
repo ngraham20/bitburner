@@ -24,7 +24,6 @@ export async function main(ns) {
 
         // clear threadcount for rebuild
         threadpool.availableThreads = 0;
-        threadpool.totalThreads = 0;
         for (const worker of workers) {
             update_worker(ns, threadpool, worker);
         }
@@ -231,7 +230,6 @@ function update_worker(ns, threadpool, worker) {
 
     threadpool.workers[worker] = {max: totalThreads, available: availableThreads};
     threadpool.availableThreads += availableThreads;
-    threadpool.totalThreads += totalThreads;
 }
 
 /** @param {NS} ns */
@@ -292,7 +290,6 @@ function new_threadpool() {
         workers: {},
         targets: [],
         allocations: {},
-        totalThreads: 0,
         availableThreads: 0,
     }
     return threadpool;
