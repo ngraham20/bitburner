@@ -168,6 +168,11 @@ function determine_assignment(ns, threadpool) {
             dispatch(ns, threadpool, HACK, target, hthreads - allocations.hack);
         }
     }
+
+    // grow joesguns to pad Hack level
+    if (threadpool.availableThreads > 0) {
+        dispatch(ns, threadpool, GROW, "joesguns", threadpool.availableThreads);
+    }
 }
 
 /** @param {NS} ns */
