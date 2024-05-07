@@ -39,7 +39,10 @@ export async function main(ns) {
 
   /** @param {NS} ns */
 function get_flags(ns) {
-    let debugmode = Boolean(ns.peek(25575));
+    let debugmode = ns.peek(25575);
+    if (debugmode == "NULL PORT DATA") {
+        debugmode = false;
+    }
     let targets = ns.peek(25565).split(/,/);
     flags = {
         debug: debugmode,
@@ -169,10 +172,10 @@ function determine_assignment(ns, threadpool) {
         }
     }
 
-    // grow joesguns to pad Hack level
-    if (threadpool.availableThreads > 0) {
-        dispatch(ns, threadpool, GROW, "joesguns", threadpool.availableThreads);
-    }
+    // // grow joesguns to pad Hack level
+    // if (threadpool.availableThreads > 0) {
+    //     dispatch(ns, threadpool, GROW, "joesguns", threadpool.availableThreads);
+    // }
 }
 
 /** @param {NS} ns */

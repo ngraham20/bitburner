@@ -46,7 +46,7 @@ async function purchase_starting_set(ns, limit) {
     let startingRam = 8;
     let i = ns.getPurchasedServers().length; // resume if halted during purchasing
     while (i < limit) {
-        if (ns.getServerMoneyAvailable("home") > ns.getPurchasedServerCost(ram)) {
+        if (ns.getServerMoneyAvailable("home") > ns.getPurchasedServerCost(startingRam)) {
             // If we have enough money, then:
             //  1. Purchase the server
             //  2. Copy our hacking script onto the newly-purchased server
