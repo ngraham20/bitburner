@@ -11,34 +11,38 @@ export async function main(ns) {
 
     // one by one, upgrade each server until each is 2048GB
     // set currentRam to the largest RAM found among servers
-    let currentram = 8;
+    let desiredRam = 16;
     for(let i = 0; i < serverLimit; i++) {
         let hostname = "pserv-"+i;
         let maxram = ns.getServerMaxRam(hostname);
-        if (maxram > currentram) {
-            currentram = maxram;
+        if (maxram > desiredRam) {
+            desiredRam = maxram;
         }
     }
     let startingserver = 0;
     let maximumram = 4096;
     // determine where in the process we are for resuming purposes
-    while (currentram <= maximumram) {
+    
+    while (desiredRam <= maximumram) {
         // iterate all servers, upgrading each a single time
         let server = startingserver;
         while (server < serverLimit) {
             let hostname = "pserv-" + server;
-            // only use 1/6 of the total available money to upgrade servers
-            if (ns.getServerMoneyAvailable("home") / 0.1 > ns.getPurchasedServerUpgradeCost(hostname, currentram) && ns.getServerMaxRam(hostname) < currentram) {
-                    ns.upgradePurchasedServer(hostname, currentram);
-                    ns.toast("Personal Server "+hostname+" upgraded to "+currentram+"GB");
-
-                server++;
+            let serverMaxRam = ns.getServerMaxRam(hostname);
+            while (serverMaxRam < desiredRam) {
+                // only use 1/6 of the total available money to upgrade servers
+                if (ns.getServerMoneyAvailable("home") / 0.1 > ns.getPurchasedServerUpgradeCost(hostname, desiredRam) && ns.getServerMaxRam(hostname) < desiredRam) {
+                        ns.upgradePurchasedServer(hostname, desiredRam);
+                        ns.toast("Personal Server "+hostname+" upgraded to "+desiredRam+"GB");
+                }
+                //Make the script wait for a second before looping again.
+                //Removing this line will cause an infinite loop and crash the game.
+                serverMaxRam = ns.getServerMaxRam(hostname);
+                await ns.sleep(1000);
             }
-            //Make the script wait for a second before looping again.
-            //Removing this line will cause an infinite loop and crash the game.
-            await ns.sleep(1000);
+            server += 1;
         }
-        currentram *= 2;
+        desiredRam *= 2;
     }
   }
 /** @param {NS} ns */
