@@ -20,7 +20,7 @@ export async function main(ns) {
         }
     }
     let startingserver = 0;
-    let maximumram = 4096;
+    let maximumram = 1048576;
     // determine where in the process we are for resuming purposes
     while (desiredRam <= maximumram) {
         // iterate all servers, upgrading each a single time
