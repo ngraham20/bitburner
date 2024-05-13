@@ -10,8 +10,6 @@ type hostThreads = {hostname: string, threads: number};
 type batchJob = {weaken: hostThreads[], grow: hostThreads, hack: hostThreads, terminate: boolean};
 type batch = {target: string, jobs: batchJob[]};
 type network = {rootedServers: string[], networkServers: string[], purchasedServers: string[]};
-// TODO: calculate how many threads are needed to grow then weaken the current best target.
-// Then, queue up that many jobs for pserv-0 to do and just loop through that as needed.
 export async function main(ns: NS) {
     let loopPort = ns.getPortHandle(25575);
     let network = analyze_network(ns, 15);
@@ -35,7 +33,7 @@ function calculate_batch(ns: NS, network: network): batch {
     let rservers = network.rootedServers;
     let nservers = network.networkServers;
     let workers = pservers.concat(rservers);
-    workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
+    workers.sort((a, b) => (ns.getServerMaxRam(a) - ns.getServerMaxRam(b)));
     let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
 
     let targets = nservers.filter(a => weight(ns, a) > 0 && is_prepped(ns, a));
@@ -107,15 +105,16 @@ function calculate_batch_hack_job(ns: NS, target: string): {hack: number, grow: 
         weaken: 0,
     };
 
-    let percent = 0.005;
+    let percent = 0.01;
 
     // 9 grow threads is the largest a batch can be and still fit on a 16GB server
-    while(completeJob.grow != 9) {
+    // while(completeJob.hack > 1) {
         let maxMoney = ns.getServerMaxMoney(target);
         let hackMoney = Math.ceil(maxMoney * percent);
         let remainder = maxMoney - hackMoney;
         let growthFactor = maxMoney / remainder;
-        let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
+        // let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
+        let hthreads = 1;
         let gthreads = Math.ceil(ns.growthAnalyze(target, growthFactor)) + Math.ceil(hthreads * 0.1);
     
         let hincrease = hthreads * HACK_SECURITY;
@@ -128,13 +127,10 @@ function calculate_batch_hack_job(ns: NS, target: string): {hack: number, grow: 
             weaken: wthreads,
         };
 
-        // the percent is too small. Increase percentage
-        if (gthreads < 9) {
-            percent += 0.001;
-        } else if (gthreads > 9) {
-            percent -= 0.001;
-        }
-    }
+        ns.tprint(completeJob);
+
+        // percent -= 0.001;
+    // }
     
     return completeJob;
 }
