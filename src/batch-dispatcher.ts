@@ -38,9 +38,6 @@ function calculate_batch(ns: NS, network: network): batch {
     workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
     let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
 
-    // filter out pserv-0 so we can use that for prepping another server instead
-    // batchers = batchers.filter(a => a != "pserv-0");
-
     let targets = nservers.filter(a => weight(ns, a) > 0 && is_prepped(ns, a));
 
     targets.sort((a, b) => weight(ns, b) - weight(ns, a));
