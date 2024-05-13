@@ -30,7 +30,7 @@ export async function main(ns) {
             let serverMaxRam = ns.getServerMaxRam(hostname);
             while (serverMaxRam < desiredRam) {
                 // only use 1/6 of the total available money to upgrade servers
-                if (ns.getServerMoneyAvailable("home") / 0.1 > ns.getPurchasedServerUpgradeCost(hostname, desiredRam) && ns.getServerMaxRam(hostname) < desiredRam) {
+                if ((ns.getServerMoneyAvailable("home") * 0.1) > ns.getPurchasedServerUpgradeCost(hostname, desiredRam) && ns.getServerMaxRam(hostname) < desiredRam) {
                         ns.upgradePurchasedServer(hostname, desiredRam);
                         ns.toast("Personal Server "+hostname+" upgraded to "+desiredRam+"GB");
                 }
@@ -70,7 +70,5 @@ async function purchase_starting_set(ns, limit) {
 function initialize(ns, con) {
     ns.print("Accessing: " + con);
         
-    ns.scp("weaken.js", con);
-    ns.scp("grow.js", con);
-    ns.scp("hack.js", con);
+    ns.scp("batch-action.js", con);
 }

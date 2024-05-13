@@ -45,5 +45,6 @@ function initialize(ns, con) {
     ns.scp("weaken.js", con);
     ns.scp("grow.js", con);
     ns.scp("hack.js", con);
+    ns.scp("batch-action.js", con);
     ns.killall(con);
 }

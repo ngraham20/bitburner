@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "typescript": "^5.4.5",
     "vite": "^4.5.3",
     "viteburner": "^0.5.3"
   },
