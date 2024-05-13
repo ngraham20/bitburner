@@ -42,9 +42,7 @@ export async function main(ns) {
 function initialize(ns, con) {
     ns.print("Accessing: " + con);
         
-    ns.scp("weaken.js", con);
-    ns.scp("grow.js", con);
-    ns.scp("hack.js", con);
-    ns.scp("batch-action.js", con);
-    ns.killall(con);
+    if (!ns.fileExists("batch-action.js")) {
+        ns.scp("batch-action.js", con);
+    }
 }

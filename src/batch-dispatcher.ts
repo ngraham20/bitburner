@@ -6,26 +6,34 @@ const HACK = "hack";
 const GROW = "grow";
 const WEAKEN = "weaken";
 
-/** @param {NS} ns */
-export async function main(ns) {
-    let target = ns.args[0];
-    
+type hostThreads = {hostname: string, threads: number};
+type batchJob = {weaken: hostThreads[], grow: hostThreads, hack: hostThreads, terminate: boolean};
+
+export async function main(ns: NS) {
+    let target = String(ns.args[0]);
+    let prepTarget = String(ns.args[1]);
     let loopPort = ns.getPortHandle(25575);
     let network = analyze_network(ns, 15);
-        let pservers = network.purchasedServers;
-        let rservers = network.rootedServers;
-        let nservers = network.networkServers;
-        let workers = pservers.concat(rservers);
-        workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
-        let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
+    let pservers = network.purchasedServers;
+    let rservers = network.rootedServers;
+    let nservers = network.networkServers;
+    let workers = pservers.concat(rservers);
+    workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
+    let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
 
-        for (const batcher of batchers) {
-            if (!ns.fileExists("batch-action.js", batcher)) {
-                ns.scp("batch-action.js", batcher, "home");
-            }
+    // filter out pserv-0 so we can use that for prepping another server instead
+    batchers = batchers.filter(a => a != "pserv-0");
+
+    for (const batcher of batchers) {
+        if (!ns.fileExists("batch-action.js", batcher)) {
+            ns.scp("batch-action.js", batcher, "home");
         }
+    }
 
-        let batch = calculate_batch(ns, batchers, target, 0.02);
+    if (is_prepped(ns, prepTarget)) {
+        target = prepTarget;
+    }
+    let batch = calculate_batch(ns, batchers, target, 0.02);
     while(true) {
         for (const job of batch) {
             execute_job(ns, job, target);
@@ -38,12 +46,19 @@ export async function main(ns) {
         nservers = network.networkServers;
         workers = pservers.concat(rservers);
         workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
-        let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
-
+        batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
+    
+        // filter out pserv-0 so we can use that for prepping another server instead
+        batchers = batchers.filter(a => a != "pserv-0");
+    
         for (const batcher of batchers) {
             if (!ns.fileExists("batch-action.js", batcher)) {
                 ns.scp("batch-action.js", batcher, "home");
             }
+        }
+    
+        if (is_prepped(ns, prepTarget)) {
+            target = prepTarget;
         }
         batch = calculate_batch(ns, batchers, target, 0.02);
         await loopPort.nextWrite();
@@ -51,12 +66,18 @@ export async function main(ns) {
     }
 }
 
+function is_prepped(ns: NS, target: string): boolean {
+    let moneyAvailable = ns.getServerMoneyAvailable(target);
+    let moneyMax = ns.getServerMaxMoney(target);
+    let minSec = ns.getServerMinSecurityLevel(target);
+    let sec = ns.getServerSecurityLevel(target);
+    if (moneyAvailable == moneyMax && minSec == sec) {
+        return true;
+    }
+    return false;
+}
 
-/** @param {NS} ns */
-function calculate_batch(ns, workers, target, percent) {
-
-    // ns.tprint("calculating batch");
-
+function calculate_batch(ns: NS, workers: string[], target: string, percent: number): batchJob[] {
     let maxMoney = ns.getServerMaxMoney(target);
     let hackMoney = Math.ceil(maxMoney * percent);
     let remainder = maxMoney - hackMoney;
@@ -82,18 +103,18 @@ function calculate_batch(ns, workers, target, percent) {
         threadpool[worker] = threads[0];
     }
 
-    let jobs = [];
+    let jobs: batchJob[];
+    jobs = [];
     let assignment = completeJob;
     while(assignment.hack == completeJob.hack && assignment.grow == completeJob.grow && assignment.weaken == completeJob.weaken) {
-        // ns.tprint("creating job");
         assignment = {
             hack: 0,
             grow: 0,
             weaken: 0,
         };
         let weakenAssignments = [];
-        let growAssignment = {};
-        let hackAssignment = {};
+        let growAssignment: hostThreads;
+        let hackAssignment: hostThreads;
         // loop through all workers
         for (const worker of workers) {
             if (threadpool[worker] == 0) {
@@ -141,7 +162,7 @@ function calculate_batch(ns, workers, target, percent) {
 }
 
 /** @param {NS} ns */
-function execute_job(ns, job, target) {
+function execute_job(ns: NS, job: {weaken: hostThreads[], grow: hostThreads, hack: hostThreads, terminate: boolean}, target: string) {
     let now = performance.now();
     let weakenTime = ns.getWeakenTime(target);
     let hackTime = ns.getHackTime(target);
@@ -159,76 +180,16 @@ function execute_job(ns, job, target) {
     ns.exec("batch-action.js", job.hack.hostname, {threads: job.hack.threads, ramOverride: ACTION_COST}, target, HACK, batchNumber, hackTime, hackEndTime, false);
 }
 
-// function add_target(threadpool, target) {
-//     if (!threadpool.targets.includes(target)) {
-//         threadpool.targets.push(target);
-//     }
-// }
-
-/** @param {NS} ns */
-function get_threads(ns, hostname) {
+function get_threads(ns: NS, hostname: string) {
     let maxRam = ns.getServerMaxRam(hostname);
     let maxThreads = Math.floor(maxRam / ACTION_COST);
     let usedRam = ns.getServerUsedRam(hostname);
     let availableRam = maxRam - usedRam;
     let availableThreads = Math.floor(availableRam / ACTION_COST);
 
-    // ns.tprint("hostname: "+hostname);
-    // ns.tprint("Max threads: "+maxThreads);
-    // ns.tprint("available threads: "+availableThreads);
     return [maxThreads, availableThreads];
 }
 
-// /** @param {NS} ns */
-// function update_worker(ns, threadpool, hostname) {
-//     let maxThreads, availableThreads = get_threads(hostname);
-
-//     // ns.tprint("Worker: "+hostname);
-//     // ns.tprint("Max threads: "+maxThreads);
-//     // ns.tprint("Available threads: "+availableThreads);
-
-//     threadpool.workers[hostname] = {maxThreads: maxThreads, availableThreads: availableThreads};
-// }
-
-// async function allocate_worker_threads(ns, worker, target, action, threads) {
-//     let maxRam = ns.getServerMaxRam(worker);
-//     let usedRam = ns.getServerUsedRam(worker);
-//     let availableRam = maxRam - usedRam;
-//     let availableThreads = Math.floor(availableRam / ACTION_COST);
-//     let allocation = Math.min(threads, availableThreads);
-
-//     // ns.tprint("Threads needed: "+threads);
-//     // ns.tprint("Available threads: "+availableThreads);
-//     // ns.tprint("Allocation: "+allocation);
-
-//     ns.exec("batch-action.js", worker, {threads: allocation, ramOverride: ACTION_COST}, target, action, 12345, 23000);
-// }
-
-// function new_threadpool() {
-//     return {
-//         workers: {},
-//         targets: [],
-//         jobQueue: [],
-//     }
-// }
-
-// /** @param {NS} ns */
-// function activate(ns, port) {
-//     ns.writePort(port);
-//     ns.clearPort(port);
-// }
-
-// /** @param {NS} ns */
-// function is_prepped(ns, target) {
-//     let maxMoney = ns.getServerMaxMoney(target);
-//     let money = ns.getServerMoneyAvailable(target);
-//     let minSec = ns.getServerMinSecurityLevel(target);
-//     let sec = ns.getServerSecurityLevel(target);
-
-//     return money == maxMoney && sec == minSec;
-// }
-
-/** @param {NS} ns */
 function analyze_network(ns: NS, maxdepth: number) {
     let ctx = {
         visited: ["home"],
