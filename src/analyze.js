@@ -1,5 +1,6 @@
 const GROWTH_SECURITY = 0.04;
 const WEAKEN_SECURITY = 0.05;
+const HACK_SECURITY = 0.002;
 const ACTION_COST = 1.75;
 
 /** @param {NS} ns */
@@ -31,4 +32,26 @@ export async function main(ns) {
     ns.tprint("Max threads: "+maxThreads);
     ns.tprint("Grow threads needed to prep: "+gthreads);
     ns.tprint("Weaken threads needed to prep: "+wthreads);
+
+    // let target = ns.args[0];
+    // let percent = ns.args[1];
+    // let maxMoney = ns.getServerMaxMoney(target);
+    // let hackMoney = Math.ceil(maxMoney * percent);
+    // let remainder = maxMoney - hackMoney;
+    // let growthFactor = maxMoney / remainder;
+    // let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
+    // let gthreads = Math.ceil(ns.growthAnalyze(target, growthFactor)) + Math.ceil(hthreads * 0.1);
+
+    // let hincrease = hthreads * HACK_SECURITY;
+    // let gincrease = gthreads * GROWTH_SECURITY;
+    // let wthreads = Math.ceil((hincrease + gincrease) / WEAKEN_SECURITY);
+
+    // const completeJob = {
+    //     hack: hthreads,
+    //     grow: gthreads,
+    //     weaken: wthreads,
+    // };
+
+    // ns.tprint("-----");
+    // ns.tprint(completeJob);
   }

@@ -8,12 +8,29 @@ const WEAKEN = "weaken";
 
 type hostThreads = {hostname: string, threads: number};
 type batchJob = {weaken: hostThreads[], grow: hostThreads, hack: hostThreads, terminate: boolean};
-
+type batch = {target: string, jobs: batchJob[]};
+type network = {rootedServers: string[], networkServers: string[], purchasedServers: string[]};
+// TODO: calculate how many threads are needed to grow then weaken the current best target.
+// Then, queue up that many jobs for pserv-0 to do and just loop through that as needed.
 export async function main(ns: NS) {
-    let target = String(ns.args[0]);
-    let prepTarget = String(ns.args[1]);
     let loopPort = ns.getPortHandle(25575);
     let network = analyze_network(ns, 15);
+    let batch = calculate_batch(ns, network);
+    while(true) {
+        for (const job of batch.jobs) {
+            execute_job(ns, job, batch.target);
+            await ns.sleep(5);
+        }
+
+        network = analyze_network(ns, 15);
+        batch = calculate_batch(ns, network);
+        await loopPort.nextWrite();
+        await ns.sleep(5);
+    }
+}
+
+// analyze the network, pick the best server that's prepped, and use that target
+function calculate_batch(ns: NS, network: network): batch {
     let pservers = network.purchasedServers;
     let rservers = network.rootedServers;
     let nservers = network.networkServers;
@@ -22,7 +39,13 @@ export async function main(ns: NS) {
     let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
 
     // filter out pserv-0 so we can use that for prepping another server instead
-    batchers = batchers.filter(a => a != "pserv-0");
+    // batchers = batchers.filter(a => a != "pserv-0");
+
+    let targets = nservers.filter(a => weight(ns, a) > 0 && is_prepped(ns, a));
+
+    targets.sort((a, b) => weight(ns, b) - weight(ns, a));
+
+    let target = targets[0];
 
     for (const batcher of batchers) {
         if (!ns.fileExists("batch-action.js", batcher)) {
@@ -30,40 +53,43 @@ export async function main(ns: NS) {
         }
     }
 
-    if (is_prepped(ns, prepTarget)) {
-        target = prepTarget;
-    }
-    let batch = calculate_batch(ns, batchers, target, 0.02);
-    while(true) {
-        for (const job of batch) {
-            execute_job(ns, job, target);
-            await ns.sleep(5);
-        }
+    return {target: target, jobs: assign_batch_jobs(ns, batchers, target)};
+}
 
-        network = analyze_network(ns, 15);
-        pservers = network.purchasedServers;
-        rservers = network.rootedServers;
-        nservers = network.networkServers;
-        workers = pservers.concat(rservers);
-        workers.sort((a, b) => (ns.getServerMaxRam(b) - ns.getServerMaxRam(a)));
-        batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
-    
-        // filter out pserv-0 so we can use that for prepping another server instead
-        batchers = batchers.filter(a => a != "pserv-0");
-    
-        for (const batcher of batchers) {
-            if (!ns.fileExists("batch-action.js", batcher)) {
-                ns.scp("batch-action.js", batcher, "home");
-            }
-        }
-    
-        if (is_prepped(ns, prepTarget)) {
-            target = prepTarget;
-        }
-        batch = calculate_batch(ns, batchers, target, 0.02);
-        await loopPort.nextWrite();
-        await ns.sleep(5);
-    }
+// Returns a weight that can be used to sort servers by hack desirability
+function weight(ns: NS, server: string) {
+	if (!server) return 0;
+
+	// Don't ask, endgame stuff
+	if (server.startsWith('hacknet-node')) return 0;
+
+	// Get the player information
+	let player = ns.getPlayer();
+
+	// Get the server information
+	let so = ns.getServer(server);
+
+	// Set security to minimum on the server object (for Formula.exe functions)
+	so.hackDifficulty = so.minDifficulty;
+
+	// We cannot hack a server that has more than our hacking skill so these have no value
+	if (so.requiredHackingSkill > player.skills.hacking) return 0;
+
+	// Default pre-Formulas.exe weight. minDifficulty directly affects times, so it substitutes for min security times
+	let weight = so.moneyMax / so.minDifficulty;
+
+	// If we have formulas, we can refine the weight calculation
+	if (ns.fileExists('Formulas.exe')) {
+		// We use weakenTime instead of minDifficulty since we got access to it, 
+		// and we add hackChance to the mix (pre-formulas.exe hack chance formula is based on current security, which is useless)
+		weight = so.moneyMax / ns.formulas.hacking.weakenTime(so, player) * ns.formulas.hacking.hackChance(so, player);
+	}
+	else
+		// If we do not have formulas, we can't properly factor in hackchance, so we lower the hacking level tolerance by half
+		if (so.requiredHackingSkill >= player.skills.hacking / 2)
+			return 0;
+
+	return weight;
 }
 
 function is_prepped(ns: NS, target: string): boolean {
@@ -77,23 +103,47 @@ function is_prepped(ns: NS, target: string): boolean {
     return false;
 }
 
-function calculate_batch(ns: NS, workers: string[], target: string, percent: number): batchJob[] {
-    let maxMoney = ns.getServerMaxMoney(target);
-    let hackMoney = Math.ceil(maxMoney * percent);
-    let remainder = maxMoney - hackMoney;
-    let growthFactor = maxMoney / remainder;
-    let hthreads = Math.floor(ns.hackAnalyzeThreads(target, hackMoney));
-    let gthreads = Math.ceil(ns.growthAnalyze(target, growthFactor)) + Math.ceil(hthreads * 0.1);
-
-    let hincrease = hthreads * HACK_SECURITY;
-    let gincrease = gthreads * GROWTH_SECURITY;
-    let wthreads = Math.ceil((hincrease + gincrease) / WEAKEN_SECURITY);
-
-    const completeJob = {
-        hack: hthreads,
-        grow: gthreads,
-        weaken: wthreads,
+function calculate_batch_hack_job(ns: NS, target: string): {hack: number, grow: number, weaken: number} {
+    let completeJob = {
+        hack: 0,
+        grow: 0,
+        weaken: 0,
     };
+
+    let percent = 0.005;
+
+    // 9 grow threads is the largest a batch can be and still fit on a 16GB server
+    while(completeJob.grow != 9) {
+        let maxMoney = ns.getServerMaxMoney(target);
+        let hackMoney = Math.ceil(maxMoney * percent);
+        let remainder = maxMoney - hackMoney;
+        let growthFactor = maxMoney / remainder;
+        let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
+        let gthreads = Math.ceil(ns.growthAnalyze(target, growthFactor)) + Math.ceil(hthreads * 0.1);
+    
+        let hincrease = hthreads * HACK_SECURITY;
+        let gincrease = gthreads * GROWTH_SECURITY;
+        let wthreads = Math.ceil((hincrease + gincrease) / WEAKEN_SECURITY);
+    
+        completeJob = {
+            hack: hthreads,
+            grow: gthreads,
+            weaken: wthreads,
+        };
+
+        // the percent is too small. Increase percentage
+        if (gthreads < 9) {
+            percent += 0.001;
+        } else if (gthreads > 9) {
+            percent -= 0.001;
+        }
+    }
+    
+    return completeJob;
+}
+
+function assign_batch_jobs(ns: NS, workers: string[], target: string): batchJob[] {
+    const completeJob = calculate_batch_hack_job(ns, target);
 
     // need to simulate worker threads here;
     let threadpool = {};

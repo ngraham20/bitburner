@@ -51,7 +51,7 @@ function Weight(ns, server) {
 	}
 	else
 		// If we do not have formulas, we can't properly factor in hackchance, so we lower the hacking level tolerance by half
-		if (so.requiredHackingSkill > player.skills.hacking / 2)
+		if (so.requiredHackingSkill > Math.ceil(player.skills.hacking / 2))
 			return 0;
 
 	return weight;
