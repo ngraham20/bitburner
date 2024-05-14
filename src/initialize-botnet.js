@@ -45,4 +45,10 @@ function initialize(ns, con) {
     if (!ns.fileExists("batch-action.js")) {
         ns.scp("batch-action.js", con);
     }
+    if (!ns.fileExists("grow.js")) {
+        ns.scp("grow.js", con);
+    }
+    if (!ns.fileExists("weaken.js")) {
+        ns.scp("weaken.js", con);
+    }
 }

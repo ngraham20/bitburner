@@ -1,6 +1,6 @@
 const ACTION_COST = 1.75;
 const HACK_SECURITY = 0.002;
-const GROWTH_SECURITY = 0.04;
+const GROWTH_SECURITY = 0.004;
 const WEAKEN_SECURITY = 0.05;
 const HACK = "hack";
 const GROW = "grow";
@@ -10,14 +10,17 @@ type hostThreads = {hostname: string, threads: number};
 type batchJob = {weaken: hostThreads[], grow: hostThreads, hack: hostThreads, terminate: boolean};
 type batch = {target: string, jobs: batchJob[]};
 type network = {rootedServers: string[], networkServers: string[], purchasedServers: string[]};
+
+// TODO: track current target and the next target. If they're not the same, run prep.js on home targeting the higher one
 export async function main(ns: NS) {
+    ns.disableLog("ALL");
     let loopPort = ns.getPortHandle(25575);
     let network = analyze_network(ns, 15);
     let batch = calculate_batch(ns, network);
     while(true) {
         for (const job of batch.jobs) {
             execute_job(ns, job, batch.target);
-            await ns.sleep(5);
+            // await ns.sleep(5);
         }
 
         network = analyze_network(ns, 15);
@@ -36,11 +39,23 @@ function calculate_batch(ns: NS, network: network): batch {
     workers.sort((a, b) => (ns.getServerMaxRam(a) - ns.getServerMaxRam(b)));
     let batchers = workers.filter(a => ns.getServerMaxRam(a) > 0);
 
-    let targets = nservers.filter(a => weight(ns, a) > 0 && is_prepped(ns, a));
-
+    let targets = nservers.filter(a => weight(ns, a) > 0);
     targets.sort((a, b) => weight(ns, b) - weight(ns, a));
+    // ns.tprint("Targets: "+targets);
+    let prepped = targets.filter(a => is_prepped(ns, a));
+    // ns.tprint("Prepped: "+prepped);
 
-    let target = targets[0];
+    let target = prepped[0]; // best prepped one
+
+    // if top target is not top prepped, prep top target
+    if (targets[0] != prepped[0]) {
+        batchers = batchers.filter(a => a != "pserv-0");
+        if (!ns.isRunning("prep.js", "home", targets[0])) {
+            ns.tprint("Prepping "+targets[0]);
+            ns.toast("Prepping "+targets[0]);
+            ns.exec("prep.js", "home", 1, targets[0]);
+        }
+    }
 
     for (const batcher of batchers) {
         if (!ns.fileExists("batch-action.js", batcher)) {
@@ -98,28 +113,46 @@ function is_prepped(ns: NS, target: string): boolean {
     return false;
 }
 
-function calculate_batch_hack_job(ns: NS, target: string): {hack: number, grow: number, weaken: number} {
+function calculate_batch_hack_job(ns: NS, target: string, maxThreads: number): {hack: number, grow: number, weaken: number} {
     let completeJob = {
         hack: 0,
         grow: 0,
         weaken: 0,
     };
 
-    let percent = 0.01;
+    // let bestWeight = -1;
+    // let newWeight = 0;
+
+    let weights = [];
+    
+    const weakenTime = ns.getWeakenTime(target); // weaken takes the longest, so it is the length of a batch
+
+    // grow and hack threads cannot be larger than the maxThreads. This prevents failure to start any batches at all
+
+    let percent = 0.005; // half a percent
 
     // 9 grow threads is the largest a batch can be and still fit on a 16GB server
-    // while(completeJob.hack > 1) {
-        let maxMoney = ns.getServerMaxMoney(target);
+    let maxMoney = ns.getServerMaxMoney(target);
+    while(percent < 1) {
+
+        // bestWeight = newWeight; //equalize the weights
+
+        // calculate a new weight
         let hackMoney = Math.ceil(maxMoney * percent);
         let remainder = maxMoney - hackMoney;
         let growthFactor = maxMoney / remainder;
-        // let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
-        let hthreads = 1;
+        let hthreads = Math.max(Math.floor(ns.hackAnalyzeThreads(target, hackMoney)), 1);
         let gthreads = Math.ceil(ns.growthAnalyze(target, growthFactor)) + Math.ceil(hthreads * 0.1);
     
         let hincrease = hthreads * HACK_SECURITY;
         let gincrease = gthreads * GROWTH_SECURITY;
         let wthreads = Math.ceil((hincrease + gincrease) / WEAKEN_SECURITY);
+
+        // if either of these exceeds the max threads, break out
+        if (hthreads > maxThreads || gthreads > maxThreads) {
+            // ns.tprint("Breached max threads");
+            break;
+        }
     
         completeJob = {
             hack: hthreads,
@@ -127,24 +160,37 @@ function calculate_batch_hack_job(ns: NS, target: string): {hack: number, grow: 
             weaken: wthreads,
         };
 
-        ns.tprint(completeJob);
+        // weight = money / (time * threads)
+        // w = m / (s * t)
+        let weight = hackMoney / (weakenTime * (hthreads + gthreads + wthreads));
 
-        // percent -= 0.001;
-    // }
-    
-    return completeJob;
+        // ns.tprint("percent: "+percent * 100);
+        // ns.tprint("job: "+JSON.stringify(completeJob));
+        // ns.tprint("weight: "+weight);
+        // ns.tprint("money/second: "+1000*hackMoney/weakenTime);
+        // ns.tprint("money/thread: "+1000*hackMoney/(hthreads + gthreads + wthreads));
+        weights.push({percent: percent, job: completeJob, mps: 1000*hackMoney/weakenTime, mpt: 1000*hackMoney/(hthreads + gthreads + wthreads), weight: weight});
+        
+        // increase hack percent by a half a percent
+        percent += 0.005;
+    }
+    // when we break out of here, the final weight is the best (local minimum possible)
+    weights.sort((a, b) => b.weight - a.weight);
+    // ns.tprint("Best weight: "+ JSON.stringify(weights[0]));
+    return weights[0].job;
 }
 
 function assign_batch_jobs(ns: NS, workers: string[], target: string): batchJob[] {
-    const completeJob = calculate_batch_hack_job(ns, target);
-
     // need to simulate worker threads here;
     let threadpool = {};
+    let maxThreads = 0; // the largest that a grow or hack can be
     for (const worker of workers) {
         // using the max threads. This will break badly if workers are ever assigned to something else
         let threads = get_threads(ns, worker);
+        maxThreads = Math.max(maxThreads, threads[0]);
         threadpool[worker] = threads[0];
     }
+    const completeJob = calculate_batch_hack_job(ns, target, maxThreads);
 
     let jobs: batchJob[];
     jobs = [];
